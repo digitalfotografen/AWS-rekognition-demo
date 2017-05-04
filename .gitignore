@@ -1,0 +1,5 @@
+
+config/credentials.ini
+vendor/*
+images/*
+config/config.php
