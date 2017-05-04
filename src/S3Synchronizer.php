@@ -1,17 +1,27 @@
 <?php
 namespace AwsTest;
 
+use Aws\Exception\AwsException;
+use Aws\Exception\MultipartUploadException;
 use Aws\S3\MultipartUploader;
 use Aws\S3\S3Client;
 
+/**
+ * Synchronizes a folder of files with an S3 bucket
+ *
+ */
 class S3Synchronizer {
     
-    protected $s3; // s3 instance
-
-    protected $bucket;
-    
+    public $bucket;
+    protected $s3; // s3 instance    
     protected $imageFolder;
     
+    /**
+     * S3Synchronizer constructor
+     * @param Aws\Sdk $AwsSdk
+     * @param string $bucket bucket name
+     * @param string $imageFolder path to image folder
+     */
     function __construct($AwsSdk, $bucket, $imageFolder)
     {
         $this->s3 = $AwsSdk->createS3();
@@ -20,13 +30,23 @@ class S3Synchronizer {
         $this->imageFolder = $imageFolder;
     }
 
+    /**
+     * list object keys from bucket
+     * @return array key = object key, value = last modified
+     */
     public function listKeys()
     {
         $list = [];
         try {
             $result = $this->s3->listObjects(['Bucket' => $this->bucket]);
-            foreach ($result['Contents'] as $object) {
-                $list[$object['Key']] = $object['LastModified'];
+            $contents = isset($result['Contents']) ? $result['Contents'] : [];
+            foreach ($contents as $object) {
+                $key = $object['Key'];
+                $list[$key] = [
+                    'Bucket' => $this->bucket, 
+                    'Name' => $key,
+                    'Modified' => $object['LastModified']
+                ];
             }
         } catch (S3Exception $e) {
             echo $e->getMessage() . "\n";
@@ -34,6 +54,10 @@ class S3Synchronizer {
         return $list;
     }
 
+    /**
+     * list files in image folder
+     * @return array key = object key, value = file path
+     */
     public function listFiles(){
         $fileList = [];
         $d = dir($this->imageFolder);
@@ -46,23 +70,37 @@ class S3Synchronizer {
         return $fileList;
     }
 
+    /**
+     * synchronize image folder with bucket
+     * @return array list of new images
+     */
     public function synchronize()
     {
         $imageKeys = $this->listKeys();
         $fileList = $this->listFiles();
-
-        $uploads = array_diff_key($fileList, $imageKeys);
-        foreach ($uploads as $key => $file){
-            $this->upload($key, $file);
-        }
+        $newImages = [];
 
         $deletes = array_diff_key($imageKeys, $fileList);
         foreach ($deletes as $key => $date){
             $this->delete($key);
         }
+
+        $uploads = array_diff_key($fileList, $imageKeys);
+        foreach ($uploads as $key => $file){
+            $this->upload($key, $file);
+            $newImages[] = $key;
+        }
+
+        return $newImages;
     }
 
-    protected function upload($key, $file)
+    /**
+     * upload file to bucket
+     * @param string $key object key
+     * @param string $file path to image file
+     * @return bool true on success
+     */
+    public function upload($key, $file)
     {
         $uploader = new MultipartUploader($this->s3, $file, [
             'bucket' => $this->bucket,
@@ -80,63 +118,57 @@ class S3Synchronizer {
         }
     }
 
-    protected function delete($key)
+    /**
+     * delete object from bucket
+     * @param string $key object key
+     * @return bool true on success
+     */
+    public function delete($key)
     {
         $response = $this->s3->deleteObject([
             'Bucket' => $this->bucket,
             'Key'    => $key,
         ]);
-        if ($response['@metadata']['statusCode'] == '204'){
-            echo sprintf("Deleted %s from bucket \n", $key);
-        } else {
-            print_r($response);
-        }
-    }
-/*
-
-
-echo "Image files\n";
-$fileList = listFiles($imagesPath);
-echo print_r($fileList, true);
-echo "\n\n";
-
-foreach($fileList as $key => $value){
-    if (!in_array($key, $bucketKeys)){
-        echo "uploading file:" . $value;
-        $uploader = new MultipartUploader($s3, $value, [
-            'bucket' => $imagesBucket,
-            'key'    => $key,
-        ]);
-
         try {
-            $result = $uploader->upload();
-            echo "Upload complete: {$result['ObjectURL']}\n";
-        } catch (MultipartUploadException $e) {
+            if ($response['@metadata']['statusCode'] == '204'){
+                echo sprintf("Deleted %s from bucket \n", $key);
+
+                return true;
+            } else {
+                print_r($response);
+
+                return false;
+            }
+        } catch (AwsException $e) {
             echo $e->getMessage() . "\n";
+
+            return false;
         }
     }
-}
-
-echo "\n";
-
-foreach ($fileList as $key => $value){
-    
-    $labels = $rekognition->detectLabels([
-        'Image' => [
-            'S3Object' => [
-                'Bucket' => $imagesBucket,
-                'Name' => $key,
-            ],
-        ],
-    ]);
-
-    echo print_r($labels['Labels'], true);
-}
 
 
+    /**
+     * delete all objects from bucket
+     * @return bool true on success
+     */
+    public function clear()
+    {
+        $result = true;
+        $keys = $this->listKeys();
+        foreach($keys as $key => $value){
+            $result &= $this->delete($key);
+        }
 
-*/
-    public function filename2key($filename)
+        return $result;
+    }
+
+    /**
+     * create object key from filename
+     * convert common illegal characters to allowed characters
+     * @param string $filename filename
+     * @return string object key
+     */
+    protected function filename2key($filename)
     {
         $table = [
             'å' => 'aa',
@@ -144,12 +176,16 @@ foreach ($fileList as $key => $value){
             'ö' => 'oe',
             ',' => '',
         ];
-    
+
         return strtr( strtolower( trim($filename) ), $table);
-    
     }
 
-
+    /**
+     * check if file is a jpeg image file
+     * @param string $path path
+     * @param string $file filename
+     * @return bool true if readlble and mime type is image/jpeg
+     */
     protected function isImageFile($path, $file){
         $fullPath = $path . '/' . $file;
         return is_readable($fullPath) && (mime_content_type($fullPath ) == "image/jpeg");
