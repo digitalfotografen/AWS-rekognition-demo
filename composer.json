@@ -1,4 +1,18 @@
 {
+    "name": "digitalfotografen/aws-rekognition-demo",
+    "type": "project",
+    "description": "This is a basic demonstrator of the Amazon AWS Rekogintion service. It was created as part of an article in the Swedish Computer Magazin Datormagazin.",
+    "homepage": "https://github.com/digitalfotografen/AWS-rekognition-demo",
+    "keywords": ["aws", "datormagazin", "rekognition"],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Ulrik Södergren",
+            "email": "ulrik@digitalfotografen.se",
+            "homepage": "http://digitalfotografen.se",
+            "role": "Developer"
+        }
+    ],
     "require": {
         "php": ">=5.6.0",
         "aws/aws-sdk-php": "^3.25",
