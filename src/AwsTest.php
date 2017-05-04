@@ -1,7 +1,6 @@
 <?php
 namespace AwsTest;
 require 'vendor/autoload.php';
-require 'config/config.php';
 
 use Aws\Credentials\CredentialProvider;
 use Aws\Rekognition\RekognitionClient;
@@ -9,16 +8,8 @@ use Aws\Sdk;
 use AwsTest\RekognitionWrapper;
 use AwsTest\S3Synchronizer;
 
-
-$config = [
-    'imagesPath' => 'images',
-    'credentialsPath' => 'config/credentials.ini',
-    'bucket' => 'ulrik.ekognition.test'
-];
-
 $rekognition;
 $s3Synchronizer;
-
 
 /**
  * Command line options
@@ -49,7 +40,14 @@ $options = getopt($shortopts, $longopts);
 if (isset($options['h']) || isset($options['help'])){
     help();
 } else {
-    initialize($config, $options);
+    if (is_readable("config/config.php")){
+        require 'config/config.php';
+        initialize($config, $options);
+    } else {
+        echo "Error: Missing bucket configuration. Please copy the default_config.php to config.php and enter required values\n";
+        exit(1);
+    }
+
     $newImages = $s3Synchronizer->synchronize();
 
     echo "=== keys and files ===\n";
