@@ -3,6 +3,7 @@ namespace AwsTest;
 
 use Aws\Exception\AwsException;
 use Aws\Exception\MultipartUploadException;
+use Aws\S3\Exception\S3Exception;
 use Aws\S3\MultipartUploader;
 use Aws\S3\S3Client;
 
@@ -49,8 +50,12 @@ class S3Synchronizer {
                 ];
             }
         } catch (S3Exception $e) {
+            echo "Oups, this failed. Have You configured Security Crentials and S3 Bucket correctly?\n\n";
             echo $e->getMessage() . "\n";
+
+            exit(1);
         }
+
         return $list;
     }
 
@@ -80,6 +85,10 @@ class S3Synchronizer {
         $fileList = $this->listFiles();
         $newImages = [];
 
+        if (empty($fileList)){
+            echo "There are no test images. Copy som image files to the images folder.\n";
+        }
+        
         $deletes = array_diff_key($imageKeys, $fileList);
         foreach ($deletes as $key => $date){
             $this->delete($key);
