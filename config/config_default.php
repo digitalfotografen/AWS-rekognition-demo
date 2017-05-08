@@ -4,6 +4,7 @@
 $config = [
     'imagesPath' => 'images',
     'credentialsPath' => 'config/credentials.ini',
-    'bucket' => 'ADD YOUR BUCKET NAME'
+    'region' => 'eu-west-1'
+    'bucket' => 'ADD YOUR BUCKET NAME',
 ];
 
